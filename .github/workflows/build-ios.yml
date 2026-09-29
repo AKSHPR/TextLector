@@ -1,0 +1,45 @@
+name: Build iOS IPA
+
+on:
+  workflow_dispatch: # Allows manual trigger from the GitHub Actions tab
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Build Frameworks & Archive iOS App
+        run: |
+          # Build Kotlin Multiplatform iOS framework dependencies
+          ./gradlew :composeApp:embedAndSignAppleFrameworkForXcode
+
+          # Build an unsigned release archive using xcodebuild
+          xcodebuild archive \
+            -project iosApp/iosApp.xcodeproj \
+            -scheme iosApp \
+            -sdk iphoneos \
+            -archivePath build/iosApp.xcarchive \
+            CODE_SIGN_ALLOWED=NO
+
+          # Package into a standard .ipa payload structure
+          mkdir -p build/Payload
+          cp -r build/iosApp.xcarchive/Products/Applications/*.app build/Payload/
+          cd build && zip -r TextLector-Unsigned.ipa Payload
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TextLector-Unsigned-IPA
+          path: build/TextLector-Unsigned.ipa
