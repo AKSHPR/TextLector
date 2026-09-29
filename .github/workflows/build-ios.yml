@@ -1,4 +1,4 @@
-name: Build iOS IPA
+name: Build iOS IPA (iOS 15 Target)
 
 on:
   workflow_dispatch:
@@ -20,13 +20,21 @@ jobs:
       - name: Grant execute permissions for Gradle wrapper
         run: chmod +x gradlew
 
+      - name: Force iOS 15 Deployment Target in Xcode Project
+        run: |
+          # Override deployment target across project & targets to iOS 15.0
+          sed -i '' 's/IPHONEOS_DEPLOYMENT_TARGET = [0-9.]*/IPHONEOS_DEPLOYMENT_TARGET = 15.0/g' iosApp/iosApp.xcodeproj/project.pbxproj
+
       - name: Setup Gradle (No Cache)
         uses: gradle/actions/setup-gradle@v3
         with:
           cache-disabled: true
 
-      - name: Build KMP iOS Framework
-        run: ./gradlew :composeApp:embedAndSignAppleFrameworkForXcode
+      - name: Build KMP iOS Framework for iOS 15
+        run: |
+          ./gradlew :composeApp:embedAndSignAppleFrameworkForXcode \
+            -Pkotlin.native.cocoapods.platform=iphoneos \
+            -Pextra.native.compiler.args="-Xoverride-konan-properties=minVersion.ios=15.0"
 
       - name: Archive iOS App
         run: |
@@ -35,16 +43,17 @@ jobs:
             -scheme iosApp \
             -sdk iphoneos \
             -archivePath build/iosApp.xcarchive \
+            IPHONEOS_DEPLOYMENT_TARGET=15.0 \
             CODE_SIGNING_ALLOWED=NO
 
       - name: Package Unsigned IPA
         run: |
           mkdir -p build/Payload
           cp -R build/iosApp.xcarchive/Products/Applications/*.app build/Payload/
-          cd build && zip -r TextLector-Unsigned.ipa Payload
+          cd build && zip -r TextLector-iOS15-Unsigned.ipa Payload
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: TextLector-Unsigned-IPA
-          path: build/TextLector-Unsigned.ipa
+          name: TextLector-iOS15-Unsigned-IPA
+          path: build/TextLector-iOS15-Unsigned.ipa
